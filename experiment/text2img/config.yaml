@@ -1,0 +1,27 @@
+# 数据路径
+data:
+  tr_files: 
+    - ./data/part-1.data.format
+  val_files: 
+    - ./data/part-1.data.format
+
+  # 数据参数
+  shuffle_size: 100
+  batch_size: 1
+  num_workers: 1
+  pin_memory: true
+  resolution: 512
+  center_crop: false
+  random_flip: false
+
+runtime:
+  
+
+model:
+  
+
+features:
+  
+
+labels:
+  

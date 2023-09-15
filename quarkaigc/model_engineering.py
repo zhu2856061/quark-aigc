@@ -6,33 +6,39 @@
 from __future__ import absolute_import, division, print_function
 
 import os
-from visualdl import LogWriter
-from quarknlp.core.config import parse_train_info_config
-from quarknlp.core.config import TrainBuilderConfig
-from quarknlp.core.data_utils import FeatureBuilder
-
-from quarknlp.core.train_factory import TrainerFactoryModule
-
+from quarkaigc.core.train_factory import TrainerFactoryModule
+from quarkaigc.core.data_factory import DataFactoryModule
+from quarkaigc.core.config import BuilderConfig, parse_info_config
 
 class ModelEngineering(object):
 
     def __init__(self, encoder_dir: str = "./encode"):
         self.encoder_dir = encoder_dir
 
-    def train(self, train_config: TrainBuilderConfig,
-              FeatureBuilderObj: FeatureBuilder):
+    def train(self, builder_config: BuilderConfig):
 
-        # 记录每个特征的长度，其中若长度为0，则不用embed层
-        train_config.features = FeatureBuilderObj.feature2dict
-        # 训练
-        TrainerModule = TrainerFactoryModule(
-            train_config,
-            self.encoder_dir,
+        # data
+        DataModule = DataFactoryModule(builder_config)
+        DataModule.setup(stage="fit")
+        ds = DataModule.train_dataloader()
+        for d in ds:
+            for k, v in d.items():
+                print(k, "-->" ,v.shape)
+            break
+        exit()
+
+        # model
+        ModelModule = ModelFactoryModule(train_config, writer).get_model()
+
+        # train
+        TrainerFactoryModule(train_config,self.encoder_dir).fit(
+            ModelModule,
+            train_dataloaders=DataModule.train_dataloader(),
+            val_dataloaders=DataModule.val_dataloader(),
         )
-        TrainerModule.trainer()
 
     def parse_config(self, config: str):
         """
         对 train info 文件进行读取，并转换成dataclass
         """
-        return parse_train_info_config(config)
+        return parse_info_config(config)

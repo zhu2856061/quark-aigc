@@ -27,7 +27,7 @@ REQUIRED_PACKAGES = [
     'transformers>=4.32.1',
 ]
 setuptools.setup(
-    name="quarknlp",
+    name="quarkaigc",
     version="0.0.1",
     author="merlin",
     description="easy-to-use",

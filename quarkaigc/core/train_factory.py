@@ -34,7 +34,10 @@ from pytorch_lightning.callbacks import (
     RichProgressBar,
 )
 from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.utilities import rank_zero_only 
+
 from quarkaigc.modules.util import exists, instantiate_from_config, isheatmap
+from quarkaigc.core.config import BuilderConfig
 
 #================================================================================
 # 一，运行相关时态
@@ -42,13 +45,13 @@ from quarkaigc.modules.util import exists, instantiate_from_config, isheatmap
 
 MULTINODE_HACKS = True
 
+
 def default_trainer_args():
     argspec = dict(inspect.signature(Trainer.__init__).parameters)
     argspec.pop("self")
     default_args = {
         param: argspec[param].default
-        for param in argspec
-        if argspec[param] != Parameter.empty
+        for param in argspec if argspec[param] != Parameter.empty
     }
     return default_args
 
@@ -80,8 +83,8 @@ def get_checkpoint_name(logdir):
     return ckpt, melk_ckpt_name
 
 
-
 def get_parser(**parser_kwargs):
+
     def str2bool(v):
         if isinstance(v, bool):
             return v
@@ -108,7 +111,8 @@ def get_parser(**parser_kwargs):
         nargs="?",
         const=True,
         default=False,
-        help="if True, skip date generation for logdir and only use naming via opt.base or opt.name (+ opt.postfix, optionally)",
+        help=
+        "if True, skip date generation for logdir and only use naming via opt.base or opt.name (+ opt.postfix, optionally)",
     )
     parser.add_argument(
         "-r",
@@ -145,9 +149,9 @@ def get_parser(**parser_kwargs):
         nargs="?",
         help="disable test",
     )
-    parser.add_argument(
-        "-p", "--project", help="name of new or path to existing project"
-    )
+    parser.add_argument("-p",
+                        "--project",
+                        help="name of new or path to existing project")
     parser.add_argument(
         "-d",
         "--debug",
@@ -205,7 +209,8 @@ def get_parser(**parser_kwargs):
         nargs="?",
         const=True,
         default=False,
-        help="enables the TensorFloat32 format both for matmuls and cuDNN for pytorch 1.12",
+        help=
+        "enables the TensorFloat32 format both for matmuls and cuDNN for pytorch 1.12",
     )
     parser.add_argument(
         "--startup",
@@ -242,8 +247,8 @@ def get_parser(**parser_kwargs):
     return parser
 
 
-
 class SetupCallback(Callback):
+
     def __init__(
         self,
         resume,
@@ -284,10 +289,8 @@ class SetupCallback(Callback):
             os.makedirs(self.cfgdir, exist_ok=True)
 
             if "callbacks" in self.lightning_config:
-                if (
-                    "metrics_over_trainsteps_checkpoint"
-                    in self.lightning_config["callbacks"]
-                ):
+                if ("metrics_over_trainsteps_checkpoint"
+                        in self.lightning_config["callbacks"]):
                     os.makedirs(
                         os.path.join(self.ckptdir, "trainstep_checkpoints"),
                         exist_ok=True,
@@ -307,12 +310,14 @@ class SetupCallback(Callback):
             print(OmegaConf.to_yaml(self.lightning_config))
             OmegaConf.save(
                 OmegaConf.create({"lightning": self.lightning_config}),
-                os.path.join(self.cfgdir, "{}-lightning.yaml".format(self.now)),
+                os.path.join(self.cfgdir,
+                             "{}-lightning.yaml".format(self.now)),
             )
 
         else:
             # ModelCheckpoint callback created log directory --- remove it
-            if not MULTINODE_HACKS and not self.resume and os.path.exists(self.logdir):
+            if not MULTINODE_HACKS and not self.resume and os.path.exists(
+                    self.logdir):
                 dst, name = os.path.split(self.logdir)
                 dst = os.path.join(dst, "child_runs", name)
                 os.makedirs(os.path.split(dst)[0], exist_ok=True)
@@ -323,6 +328,7 @@ class SetupCallback(Callback):
 
 
 class ImageLogger(Callback):
+
     def __init__(
         self,
         batch_frequency,
@@ -342,7 +348,9 @@ class ImageLogger(Callback):
         self.rescale = rescale
         self.batch_freq = batch_frequency
         self.max_images = max_images
-        self.log_steps = [2**n for n in range(int(np.log2(self.batch_freq)) + 1)]
+        self.log_steps = [
+            2**n for n in range(int(np.log2(self.batch_freq)) + 1)
+        ]
         if not increase_log_steps:
             self.log_steps = [self.batch_freq]
         self.clamp = clamp
@@ -367,15 +375,14 @@ class ImageLogger(Callback):
         for k in images:
             if isheatmap(images[k]):
                 fig, ax = plt.subplots()
-                ax = ax.matshow(
-                    images[k].cpu().numpy(), cmap="hot", interpolation="lanczos"
-                )
+                ax = ax.matshow(images[k].cpu().numpy(),
+                                cmap="hot",
+                                interpolation="lanczos")
                 plt.colorbar(ax)
                 plt.axis("off")
 
                 filename = "{}_gs-{:06}_e-{:06}_b-{:06}.png".format(
-                    k, global_step, current_epoch, batch_idx
-                )
+                    k, global_step, current_epoch, batch_idx)
                 os.makedirs(root, exist_ok=True)
                 path = os.path.join(root, filename)
                 plt.savefig(path)
@@ -389,8 +396,7 @@ class ImageLogger(Callback):
                 grid = grid.numpy()
                 grid = (grid * 255).astype(np.uint8)
                 filename = "{}_gs-{:06}_e-{:06}_b-{:06}.png".format(
-                    k, global_step, current_epoch, batch_idx
-                )
+                    k, global_step, current_epoch, batch_idx)
                 path = os.path.join(root, filename)
                 os.makedirs(os.path.split(path)[0], exist_ok=True)
                 img = Image.fromarray(grid)
@@ -410,28 +416,27 @@ class ImageLogger(Callback):
     @rank_zero_only
     def log_img(self, pl_module, batch, batch_idx, split="train"):
         check_idx = batch_idx if self.log_on_batch_idx else pl_module.global_step
-        if (
-            self.check_frequency(check_idx)
-            and hasattr(pl_module, "log_images")  # batch_idx % self.batch_freq == 0
-            and callable(pl_module.log_images)
-            and
-            # batch_idx > 5 and
-            self.max_images > 0
-        ):
+        if (self.check_frequency(check_idx) and hasattr(
+                pl_module, "log_images")  # batch_idx % self.batch_freq == 0
+                and callable(pl_module.log_images) and
+                # batch_idx > 5 and
+                self.max_images > 0):
             logger = type(pl_module.logger)
             is_train = pl_module.training
             if is_train:
                 pl_module.eval()
 
             gpu_autocast_kwargs = {
-                "enabled": self.enable_autocast,  # torch.is_autocast_enabled(),
+                "enabled":
+                self.enable_autocast,  # torch.is_autocast_enabled(),
                 "dtype": torch.get_autocast_gpu_dtype(),
                 "cache_enabled": torch.is_autocast_cache_enabled(),
             }
-            with torch.no_grad(), torch.cuda.amp.autocast(**gpu_autocast_kwargs):
-                images = pl_module.log_images(
-                    batch, split=split, **self.log_images_kwargs
-                )
+            with torch.no_grad(), torch.cuda.amp.autocast(
+                    **gpu_autocast_kwargs):
+                images = pl_module.log_images(batch,
+                                              split=split,
+                                              **self.log_images_kwargs)
 
             for k in images:
                 N = min(images[k].shape[0], self.max_images)
@@ -450,17 +455,16 @@ class ImageLogger(Callback):
                 pl_module.current_epoch,
                 batch_idx,
                 pl_module=pl_module
-                if isinstance(pl_module.logger, WandbLogger)
-                else None,
+                if isinstance(pl_module.logger, WandbLogger) else None,
             )
 
             if is_train:
                 pl_module.train()
 
     def check_frequency(self, check_idx):
-        if ((check_idx % self.batch_freq) == 0 or (check_idx in self.log_steps)) and (
-            check_idx > 0 or self.log_first_step
-        ):
+        if ((check_idx % self.batch_freq) == 0 or
+            (check_idx in self.log_steps)) and (check_idx > 0
+                                                or self.log_first_step):
             try:
                 self.log_steps.pop(0)
             except IndexError as e:
@@ -470,8 +474,10 @@ class ImageLogger(Callback):
         return False
 
     @rank_zero_only
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if not self.disabled and (pl_module.global_step > 0 or self.log_first_step):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch,
+                           batch_idx):
+        if not self.disabled and (pl_module.global_step > 0
+                                  or self.log_first_step):
             self.log_img(pl_module, batch, batch_idx, split="train")
 
     @rank_zero_only
@@ -481,25 +487,22 @@ class ImageLogger(Callback):
             self.log_img(pl_module, batch, batch_idx, split="train")
 
     @rank_zero_only
-    def on_validation_batch_end(
-        self, trainer, pl_module, outputs, batch, batch_idx, *args, **kwargs
-    ):
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch,
+                                batch_idx, *args, **kwargs):
         if not self.disabled and pl_module.global_step > 0:
             self.log_img(pl_module, batch, batch_idx, split="val")
         if hasattr(pl_module, "calibrate_grad_norm"):
-            if (
-                pl_module.calibrate_grad_norm and batch_idx % 25 == 0
-            ) and batch_idx > 0:
+            if (pl_module.calibrate_grad_norm
+                    and batch_idx % 25 == 0) and batch_idx > 0:
                 self.log_gradients(trainer, pl_module, batch_idx=batch_idx)
+
 
 #================================================================================
 # 二，准备训练运行时状态
 #================================================================================
 class TrainerFactoryModule(object):
 
-    def __init__(self,
-                 train_config: TrainBuilderConfig,
-                 encoder_dir: str = "./encode"):
+    def __init__(self, config: BuilderConfig, encoder_dir: str = "./encode"):
         """
         train_config: 训练参数
         encoder_dir: 训练的中间结果和日志，落盘位置
@@ -509,17 +512,17 @@ class TrainerFactoryModule(object):
         self.progress_bar = RichProgressBar(leave=True)
 
         self.encoder_dir = encoder_dir
-        self.train_config = train_config
-        self.checkpoint_path = train_config.checkpoint_path
-        self.strategy = train_config.strategy
-        self.accelerator = train_config.accelerator
-        self.devices = train_config.devices
-        self.max_epochs = train_config.max_epochs
+        self.config = config
+        self.checkpoint_path = config.TrainBuilder.Runtime.checkpoint_path
+        self.strategy = config.TrainBuilder.Runtime.strategy
+        self.accelerator = config.TrainBuilder.Runtime.accelerator
+        self.devices = config.TrainBuilder.Runtime.devices
+        self.max_epochs = config.TrainBuilder.Runtime.max_epochs
+        self.experiment_name = config.TrainBuilder.Runtime.experiment_name
 
     def trainer(self):
         ckpt_callback = ModelCheckpoint(
-            dirpath=os.path.join(self.encoder_dir,
-                                 self.train_config.experiment_name,
+            dirpath=os.path.join(self.encoder_dir, self.experiment_name,
                                  "savemodel"),
             save_weights_only=True,
             monitor='val/loss',
@@ -534,18 +537,10 @@ class TrainerFactoryModule(object):
         )
 
         tb_logger = pl_loggers.TensorBoardLogger(
-            save_dir=os.path.join(self.encoder_dir,
-                                  self.train_config.experiment_name),
+            save_dir=os.path.join(self.encoder_dir, self.experiment_name),
             name='logs',
             log_graph=True,
         )
-
-        # data
-        DataModule = DataFactoryModule(train_config, FeatureBuilderObj)
-        DataModule.setup(stage="fit")
-
-        # model
-        ModelModule = ModelFactoryModule(train_config, writer).get_model()
 
         # train
         trainer = pl.Trainer(
@@ -560,11 +555,6 @@ class TrainerFactoryModule(object):
                 early_stopping,
             ],
             logger=[tb_logger],
-        )
-        trainer.fit(
-            ModelModule,
-            train_dataloaders=DataModule.train_dataloader(),
-            val_dataloaders=DataModule.val_dataloader(),
         )
 
         return trainer

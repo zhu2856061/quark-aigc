@@ -5,8 +5,8 @@
 # type: ignore
 from __future__ import absolute_import, division, print_function
 
-from quarknlp.core.data_utils import FeatureBuilder
-from quarknlp.core.config import FeatureBuilderConfig, parse_feature_info_config
+
+from quarkaigc.core.config import FeatureBuilderConfig, parse_feature_info_config
 
 
 class FeatureEngineering(object):
