@@ -22,6 +22,8 @@ REQUIRED_PACKAGES = [
     'accelerate>=0.23.0',
     'safetensors>=0.3.1'
 ]
+
+
 setuptools.setup(
     name="quarkaigc",
     version="0.0.1",
