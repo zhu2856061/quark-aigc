@@ -7,19 +7,17 @@ from __future__ import absolute_import, division, print_function
 import sys
 
 sys.path.append("../..")
-import os
-import json
-from quarkaigc.feature_engineering import FeatureEngineering
-from quarkaigc.model_engineering import ModelEngineering
 
-FE = FeatureEngineering()
-ME = ModelEngineering()
+from quarkaigc.pretrain_engineering import PretrainEngineering
+
+PE = PretrainEngineering()
 
 # yaml
-conf = "config.yaml"
-fconfig = FE.parse_config(conf)
-tconfig = ME.parse_config(conf)
+param_conf = "config.yaml"
+tconfig = PE.parse_config(param_conf)
 
 # ======================================================
 # 模型训练
-ME.train(tconfig)
+PE.train(tconfig)
+# ======================================================
+# PE.model_tensorboard("./encode/merlin/logs")

@@ -15,16 +15,12 @@ REQUIRED_PACKAGES = [
     'torch>=2.0.0',
     'loguru>=0.7.0',
     'cython>=0.29.32',
-    'scikit-learn>=1.1.2',
     'loguru>=0.7.0',
-    'wandb>=0.15.8',
-    'shap>=0.41.0',
-    'tqdm>=4.65.0',
-    'visualdl>=2.5.3',
-    'onnx>=1.14.0',
-    'onnxruntime>=1.14.1',
-    'rich>=13.3.5',
     'transformers>=4.32.1',
+    'diffusers>=0.21.3',
+    'invisible_watermark>=0.1.5',
+    'accelerate>=0.23.0',
+    'safetensors>=0.3.1'
 ]
 setuptools.setup(
     name="quarkaigc",
@@ -34,7 +30,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="None",
-    packages=setuptools.find_packages(exclude=["bak", "experiment", "tools", "test"]),
+    packages=setuptools.find_packages(exclude=["experiment", "tools", "test"]),
     include_package_data=True,
     python_requires=">=3.10",
     install_requires=REQUIRED_PACKAGES,
@@ -50,5 +46,3 @@ setuptools.setup(
 )
 
 # python setup.py bdist_wheel
-#
-#

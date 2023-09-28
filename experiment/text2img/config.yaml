@@ -1,27 +1,64 @@
-# 数据路径
-data:
-  tr_files: 
-    - ./data/part-1.data.format
-  val_files: 
-    - ./data/part-1.data.format
+lightningModule:
+  target: quarkaigc.task.classification
 
-  # 数据参数
-  shuffle_size: 100
-  batch_size: 1
-  num_workers: 1
-  pin_memory: true
-  resolution: 512
-  center_crop: false
-  random_flip: false
+  runtime:
+    experiment_name: merlin
+    checkpoint_path: "savemodel"
+    strategy: auto # ddp
+    accelerator: cpu
+    devices: 1
+    max_epochs: 1
 
-runtime:
-  
+  data:
+    target: transformers.AutoTokenizer
+    model_card_id: albert-base-v2
+    cache_dir: "./"
+    params:
+      padding: max_length
+      truncation: true
+      max_length: 10
+      return_tensors: pt
 
-model:
-  
+      tr_files: 
+        - ./data/train_imdb.format
+      val_files: 
+        - ./data/test_imdb.format
+      shuffle_size: 100
+      batch_size: 2
+      num_workers: 1
+      pin_memory: true
 
-features:
-  
+  model:
+    network_config:
+      base:
+        target: transformers.AlbertModel
+        model_card_id: albert-base-v2
+      task:
+        target: quarkllm.module.layer.feedforward.FeedForward
+        params:
+          n_layers: [768,256,2]
+          dropout: 0.1
+          bias: true
 
-labels:
-  
+    loss_config:
+      target: torch.nn.CrossEntropyLoss
+
+    metric_config:
+      - name: acc
+        target: torchmetrics.classification.BinaryAccuracy
+
+    optimizer_config:
+      target: torch.optim.AdamW
+      params:
+        lr: 1e-4
+        weight_decay: 1e-4
+
+    scheduler_config:
+      target: quarkaigc.module.scheduler.lr_scheduler.LambdaLinearScheduler
+      params:
+        warm_up_steps: [ 10000 ]
+        cycle_lengths: [ 10000000000000 ]
+        f_start: [ 1.e-6 ]
+        f_max: [ 1. ]
+        f_min: [ 1. ]
+
