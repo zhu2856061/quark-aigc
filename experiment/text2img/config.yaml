@@ -1,6 +1,4 @@
 lightningModule:
-  target: quarkaigc.task.classification
-
   runtime:
     experiment_name: merlin
     checkpoint_path: "savemodel"
@@ -10,55 +8,69 @@ lightningModule:
     max_epochs: 1
 
   data:
-    target: transformers.AutoTokenizer
-    model_card_id: albert-base-v2
-    cache_dir: "./"
+    target: quarkaigc.task.text2img.DataFactoryModule
     params:
-      padding: max_length
-      truncation: true
-      max_length: 10
-      return_tensors: pt
+      target: transformers.BertTokenizer
+      # model_card_id: alibaba-pai/pai-diffusion-artist-xlarge-zh
+      model_card_id: pai-diffusion-artist-xlarge-zh
+      subfolder: tokenizer
+      cache_dir: "./"
+      params:
+        padding: max_length
+        truncation: true
+        return_tensors: pt
 
-      tr_files: 
-        - ./data/train_imdb.format
-      val_files: 
-        - ./data/test_imdb.format
-      shuffle_size: 100
-      batch_size: 2
-      num_workers: 1
-      pin_memory: true
+        tr_files: 
+          - ../data/train.csv
+        val_files: 
+          - ../data/test.csv
+        shuffle_size: 100
+        batch_size: 16
+        num_workers: 1
+        pin_memory: true
+        resolution: 768
+        center_crop: true
+        random_flip: true
 
   model:
-    network_config:
-      base:
-        target: transformers.AlbertModel
-        model_card_id: albert-base-v2
-      task:
-        target: quarkllm.module.layer.feedforward.FeedForward
+    target: quarkaigc.task.text2img.TaskFactoryModule
+    params:
+      network_config:
+        base:
+          target: diffusers.StableDiffusionPipeline
+          # model_card_id: alibaba-pai/pai-diffusion-artist-xlarge-zh
+          model_card_id: alibaba-pai/pai-diffusion-artist-xlarge-zh
         params:
-          n_layers: [768,256,2]
-          dropout: 0.1
-          bias: true
+          free_vae: true
+          free_text_encoder: true
+          clip_skip: 1
+          mixed_precision: fp16
 
-    loss_config:
-      target: torch.nn.CrossEntropyLoss
+      loss_config:
+        target: torch.nn.MSELoss
 
-    metric_config:
-      - name: acc
-        target: torchmetrics.classification.BinaryAccuracy
+      # metric_config:
+      #   - name: clip_score
+      #     target: quarkaigc.utils.metrics.CLIPScore
+      #     params:
+      #       model_name_or_path: OFA-Sys/chinese-clip-vit-huge-patch14
+        # - name: fid
+        #   target: torchmetrics.image.fid.FrechetInceptionDistance
+        #   params:
+        #     normalize: true
 
-    optimizer_config:
-      target: torch.optim.AdamW
-      params:
-        lr: 1e-4
-        weight_decay: 1e-4
+      optimizer_config:
+        target: torch.optim.AdamW
+        params:
+          lr: 1e-4
+          weight_decay: 1e-4
 
-    scheduler_config:
-      target: quarkaigc.module.scheduler.lr_scheduler.LambdaLinearScheduler
-      params:
-        warm_up_steps: [ 10000 ]
-        cycle_lengths: [ 10000000000000 ]
-        f_start: [ 1.e-6 ]
-        f_max: [ 1. ]
-        f_min: [ 1. ]
+      scheduler_config:
+        target: quarkaigc.module.scheduler.lr_scheduler.LambdaLinearScheduler
+        params:
+          warm_up_steps: [ 10000 ]
+          cycle_lengths: [ 10000000000000 ]
+          f_start: [ 1.e-6 ]
+          f_max: [ 1. ]
+          f_min: [ 1. ]
 
