@@ -12,18 +12,28 @@ from typing import Dict
 warnings.filterwarnings(action='ignore', category=UserWarning)
 
 
-def instantiate_model_card_from_config(config):
+def instantiate_from_model_card(config):
     module, cls = config["target"].rsplit(".", 1)
     model_card = config["model_card_id"]
     cache_dir = config.get("cache_dir", "./")
-    subfolder = config.get("subfolder",None)
+    subfolder = config.get("subfolder", None)
+    local_files_only = config.get("local_files_only", False)
 
     importlib.invalidate_caches()
     module_imp = getattr(importlib.import_module(module, package=None), cls)
     if subfolder:
-        return module_imp.from_pretrained(model_card, subfolder=subfolder,cache_dir=cache_dir)
+        return module_imp.from_pretrained(
+            model_card,
+            subfolder=subfolder,
+            cache_dir=cache_dir,
+            local_files_only=local_files_only,
+        )
     else:
-        return module_imp.from_pretrained(model_card, cache_dir=cache_dir)
+        return module_imp.from_pretrained(
+            model_card,
+            cache_dir=cache_dir,
+            local_files_only=local_files_only,
+        )
 
 
 def instantiate_from_config(config):

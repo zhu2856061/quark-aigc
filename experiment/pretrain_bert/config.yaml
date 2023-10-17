@@ -1,0 +1,63 @@
+lightningModule:
+
+  data:
+    target: quarkaigc.task.pretrain_bert.DataFactoryModule
+    params:
+      target: transformers.AutoTokenizer
+      model_card_id: ../huggingface/Erlangshen-DeBERTa-v2-97M-Chinese
+      cache_dir: "../huggingface/"
+      local_files_only: true
+      padding: true
+      return_tensors: pt
+
+      tr_files: 
+        - ./data/train.json.format
+      val_files: 
+        - ./data/dev.json.format
+      shuffle_size: 2500
+      batch_size: 16
+      num_workers: 1
+      pin_memory: true
+
+  model:
+    target: quarkaigc.task.pretrain_bert.TaskFactoryModule
+    params:
+      network_config:
+        base:
+          target: transformers.DebertaV2ForMaskedLM
+          model_card_id: ../huggingface/Erlangshen-DeBERTa-v2-97M-Chinese
+          cache_dir: "../huggingface/"
+          local_files_only: true
+
+      loss_config:
+        target: torch.nn.CrossEntropyLoss
+
+      metric_config:
+        - name: acc
+          target: torchmetrics.classification.MulticlassAccuracy
+          params:
+            num_classes: 21128
+
+      optimizer_config:
+        target: torch.optim.AdamW
+        params:
+          lr: 1e-6
+          weight_decay: 1e-6
+
+      scheduler_config:
+        target: quarkaigc.module.scheduler.lr_scheduler.LambdaWarmUpLinearScheduler
+        params:
+          warm_up_steps: [ 100 ]
+          cycle_lengths: [ 10000000000000 ]
+          f_start: [ 1.e-6 ]
+          f_max: [ 1. ]
+          f_min: [ 1.e-6 ]
+          verbosity_interval: 0
+
+  runtime:
+    experiment_name: merlin
+    checkpoint_path: "savemodel"
+    strategy: auto # ddp
+    accelerator: cpu
+    devices: 1
+    max_epochs: 50

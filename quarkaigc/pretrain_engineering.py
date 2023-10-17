@@ -22,7 +22,7 @@ from pytorch_lightning.callbacks import (
 from quarkaigc.utils.utils import (
     instantiate_from_params,
     instantiate_from_one_params,
-    instantiate_model_card_from_config
+    instantiate_from_model_card
 )
 
 
@@ -148,20 +148,6 @@ class PretrainEngineering(object):
 
         pred = self.LightningModule(x)
         return pred
-
-    def model_visual(self, scalar_dir=None, model_path=None):
-        from visualdl.server import app
-        app.run(
-            scalar_dir,
-            model=model_path,
-            host="127.0.0.1",
-            port=8080,
-            cache_timeout=60,
-            language=None,
-            public_path=None,
-            api_only=False,
-            open_browser=False,
-        )
 
     def model_tensorboard(self, log_dir: str = None):
         os.system(f"tensorboard --logdir={log_dir}")

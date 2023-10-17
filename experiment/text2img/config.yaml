@@ -10,9 +10,8 @@ lightningModule:
   data:
     target: quarkaigc.task.text2img.DataFactoryModule
     params:
-      target: transformers.BertTokenizer
-      # model_card_id: alibaba-pai/pai-diffusion-artist-xlarge-zh
-      model_card_id: pai-diffusion-artist-xlarge-zh
+      target: transformers.CLIPTokenizer
+      model_card_id: stable-diffusion-2-1
       subfolder: tokenizer
       cache_dir: "./"
       params:
@@ -21,9 +20,9 @@ lightningModule:
         return_tensors: pt
 
         tr_files: 
-          - ../data/train.csv
+          - ./data/train.csv
         val_files: 
-          - ../data/test.csv
+          - ./data/test.csv
         shuffle_size: 100
         batch_size: 16
         num_workers: 1
@@ -38,8 +37,7 @@ lightningModule:
       network_config:
         base:
           target: diffusers.StableDiffusionPipeline
-          # model_card_id: alibaba-pai/pai-diffusion-artist-xlarge-zh
-          model_card_id: alibaba-pai/pai-diffusion-artist-xlarge-zh
+          model_card_id: stable-diffusion-2-1
         params:
           free_vae: true
           free_text_encoder: true

@@ -20,14 +20,14 @@ from torchmetrics import MetricCollection
 from torchmetrics.aggregation import MeanMetric
 
 from quarkaigc.utils.utils import (
-    instantiate_model_card_from_config,
+    instantiate_from_model_card,
     instantiate_from_config,
-    instantiate_from_one_params,
-    instantiate_from_params_config
+    instantiate_from_params_config,
 )
 from tqdm import tqdm
 import csv
-csv.field_size_limit(100000000) #for parse,csv error
+
+csv.field_size_limit(100000000)  #for parse,csv error
 
 from PIL import Image
 from io import BytesIO
@@ -40,13 +40,12 @@ class DataFactoryModule(pl.LightningDataModule):
 
     def __init__(self, config) -> None:
 
-        self.tokenizer = instantiate_model_card_from_config(config)
+        self.tokenizer = instantiate_from_model_card(config)
 
         self.params = config.get("params", dict())
 
         self.padding = self.params.get('padding', 'max_length')
         self.truncation = self.params.get('truncation', True)
-        # self.max_length = self.params.get('max_length', 1024)
         self.return_tensors = self.params.get('return_tensors', 'pt')
 
         self.tr_files = self.params.get('tr_files')
@@ -56,21 +55,21 @@ class DataFactoryModule(pl.LightningDataModule):
         self.num_workers = self.params.get('num_workers', 1)
         self.pin_memory = self.params.get('pin_memory', False)
 
-        self.resolution=self.params.get('resolution',768)
-        self.center_crop=self.params.get('center_crop', False)
-        self.random_flip=self.params.get("random_flip",True)
+        self.resolution = self.params.get('resolution', 768)
+        self.center_crop = self.params.get('center_crop', False)
+        self.random_flip = self.params.get("random_flip", True)
 
-        self.image_transform = transforms.Compose(
-                        [
-                            transforms.Resize(self.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
-                            transforms.CenterCrop(self.resolution) if self.center_crop else transforms.RandomCrop(self.resolution),
-                            transforms.RandomHorizontalFlip() if self.random_flip else transforms.Lambda(lambda x: x),
-                            transforms.ToTensor(),
-                            transforms.Normalize([0.5], [0.5]),
-                        ]
-                    )
-
-
+        self.image_transform = transforms.Compose([
+            transforms.Resize(
+                self.resolution,
+                interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(self.resolution)
+            if self.center_crop else transforms.RandomCrop(self.resolution),
+            transforms.RandomHorizontalFlip()
+            if self.random_flip else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
+        ])
 
     def setup(self, stage=None):
         if stage == "fit":
@@ -106,55 +105,73 @@ class DataFactoryModule(pl.LightningDataModule):
             collate_fn=self.val_collate_fn,
             pin_memory=self.pin_memory,
         )
+
     #解析csv文件
-    def row_processor(self,row):
-        return {"text": row[4], "image": Image.open(BytesIO(base64.b64decode(str.encode(row[3])))),
-                'hash_id':int(row[0]),'sku_id':row[1],'url':row[2],'width':int(row[5]),
-                'height':int(row[6]),'clip_score':float(row[7]),'aesth':float(row[8])}
-    
+    def row_processor(self, row):
+        return {
+            "text": row[4],
+            "image": Image.open(BytesIO(base64.b64decode(str.encode(row[3])))),
+            'hash_id': int(row[0]),
+            'sku_id': row[1],
+            'url': row[2],
+            'width': int(row[5]),
+            'height': int(row[6]),
+            'clip_score': float(row[7]),
+            'aesth': float(row[8])
+        }
+
     # 读取数据 - 多文件读取
     def build_datapipes(self, files):
-        datapipe = dp.iter.FileOpener(files, mode='rt').parse_csv(delimiter=",")
-        datapipe=datapipe.map(self.row_processor)
+        datapipe = dp.iter.FileOpener(files,
+                                      mode='rt').parse_csv(delimiter=",")
+        datapipe = datapipe.map(self.row_processor)
         return datapipe
 
     # 数据处理逻辑 - 对一个batch进行处理
     def train_collate_fn(self, batch):
-        pixel_values = torch.stack([self.image_transform(example['image'].convert("RGB")) for example in batch])
-        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+        pixel_values = torch.stack([
+            self.image_transform(example['image'].convert("RGB"))
+            for example in batch
+        ])
+        pixel_values = pixel_values.to(
+            memory_format=torch.contiguous_format).float()
         input_ids = self.tokenizer(
-            [example['text'] for example in batch],  padding="max_length", 
-            truncation=self.truncation, return_tensors=self.return_tensors
-        ).input_ids
+            [example['text'] for example in batch],
+            padding="max_length",
+            truncation=self.truncation,
+            return_tensors=self.return_tensors).input_ids
         _batch = {
             "input_ids": input_ids,
             "pixel_values": pixel_values,
         }
         return _batch
-    
+
     def val_collate_fn(self, batch):
-        pixel_values = torch.stack([self.image_transform(example['image'].convert("RGB")) for example in batch])
-        pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
+        pixel_values = torch.stack([
+            self.image_transform(example['image'].convert("RGB"))
+            for example in batch
+        ])
+        pixel_values = pixel_values.to(
+            memory_format=torch.contiguous_format).float()
         input_ids = self.tokenizer(
-            [example['text'] for example in batch], padding="max_length", 
-            truncation=self.truncation, return_tensors=self.return_tensors
-        ).input_ids
-        batch_size= input_ids.shape[0]
-        neg_input_ids= self.tokenizer(
-            ['']*batch_size, padding="max_length", 
-            truncation=self.truncation, return_tensors=self.return_tensors
-        ).input_ids
+            [example['text'] for example in batch],
+            padding="max_length",
+            truncation=self.truncation,
+            return_tensors=self.return_tensors).input_ids
+        batch_size = input_ids.shape[0]
+        neg_input_ids = self.tokenizer(
+            [''] * batch_size,
+            padding="max_length",
+            truncation=self.truncation,
+            return_tensors=self.return_tensors).input_ids
         _batch = {
             "input_ids": input_ids,
-            'neg_input_ids':neg_input_ids,
+            'neg_input_ids': neg_input_ids,
             "pixel_values": pixel_values,
-            'text':[example['text'] for example in batch],
-            'image':[example['image'].convert("RGB") for example in batch]
+            'text': [example['text'] for example in batch],
+            'image': [example['image'].convert("RGB") for example in batch]
         }
         return _batch
-    
-
-
 
 
 class ModelFactoryModule(torch.nn.Module):
@@ -163,83 +180,100 @@ class ModelFactoryModule(torch.nn.Module):
         super().__init__()
         # 基座
         self.params = network_conf.get("params", dict())
-        self.free_vae=self.params.get("free_vae",True)
-        self.free_text_enocoder=self.params.get("free_text_encoder",True)
-        self.clip_skip=self.params.get("clip_skip",0)
-        self.mixed_precision=self.params.get("mixed_precision",None)
-        self.noise_offset=self.params.get("noise_offset",True)
-        base_model = instantiate_model_card_from_config(network_conf['base'])
+        self.free_vae = self.params.get("free_vae", True)
+        self.free_text_enocoder = self.params.get("free_text_encoder", True)
+        self.clip_skip = self.params.get("clip_skip", 0)
+        self.mixed_precision = self.params.get("mixed_precision", None)
+        self.noise_offset = self.params.get("noise_offset", True)
+        base_model = instantiate_from_model_card(network_conf['base'])
         self.weight_dtype = torch.float32
 
-        
+        self.net = torch.nn.ModuleDict(
+            dict(
+                vae=base_model.vae,
+                text_encoder=base_model.text_encoder,
+                unet=base_model.unet,
+            ))
 
-        self.net = torch.nn.ModuleDict(dict(
-            vae=base_model.vae,
-            text_encoder=base_model.text_encoder,
-            unet=base_model.unet,
-        ))
         #一些模型参数
-        self.vae_scale_factor = 2 ** (len(self.net.vae.config.block_out_channels) - 1)
+        self.vae_scale_factor = 2**(
+            len(self.net.vae.config.block_out_channels) - 1)
         #转化双精度
         if not self.mixed_precision:
-            if self.mixed_precision=='fp16':
-               self.weight_dtype = torch.float16
-            elif self.mixed_precision=='bf16':
+            if self.mixed_precision == 'fp16':
+                self.weight_dtype = torch.float16
+            elif self.mixed_precision == 'bf16':
                 self.weight_dtype = torch.bfloat16
         self.net.vae.to(dtype=self.weight_dtype)
         self.net.text_encoder.to(dtype=self.weight_dtype)
         # 冻结 基座 - 定制化冻结
         if self.free_vae:
             self.net.vae.requires_grad_(False)
+
         #text encoder 可能会放开上面的层
         if self.free_text_enocoder:
-            for name, param in list(self.net.text_encoder.named_parameters()): 
-                # print('This layer will be frozen: {}'.format(name)) 
+            for name, param in list(self.net.text_encoder.named_parameters()):
+                # print('This layer will be frozen: {}'.format(name))
                 # for param in self.base.parameters():
                 param.requires_grad = False
-        self.noise_scheduler=base_model.scheduler
+        self.noise_scheduler = base_model.scheduler
 
-    
     def decode_latents(self, latents):
-        
+
         latents = 1 / self.net.vae.config.scaling_factor * latents
         image = self.net.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clamp(0, 1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().permute(0, 2, 3, 1).float()
         return image
-    
-    def prepare_latents(self, batch_size, num_channels_latents, height, width, dtype,generator, device, latents=None):
-        
-        shape = (batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor)
+
+    def prepare_latents(self,
+                        batch_size,
+                        num_channels_latents,
+                        height,
+                        width,
+                        dtype,
+                        generator,
+                        device,
+                        latents=None):
+
+        shape = (batch_size, num_channels_latents,
+                 height // self.vae_scale_factor,
+                 width // self.vae_scale_factor)
 
         if latents is None:
-            latents = torch.randn(shape, generator=generator, device=torch.device("cpu"), dtype=dtype,layout=torch.strided).to(device)
+            latents = torch.randn(shape,
+                                  generator=generator,
+                                  device=torch.device("cpu"),
+                                  dtype=dtype,
+                                  layout=torch.strided).to(device)
         else:
             latents = latents.to(device)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.noise_scheduler.init_noise_sigma
         return latents
-    
-    def encode_text_ids(self,input_ids):
+
+    def encode_text_ids(self, input_ids):
         if not self.clip_skip:
             encoder_hidden_states = self.net.text_encoder(input_ids)[0]
         else:
-            encoder_hidden_states=self.net.text_encoder(
-                    input_ids, output_hidden_states=True
-                )
-            encoder_hidden_states = encoder_hidden_states[-1][-(self.clip_skip + 1)]
+            encoder_hidden_states = self.net.text_encoder(
+                input_ids, output_hidden_states=True)
+            encoder_hidden_states = encoder_hidden_states[-1][-(
+                self.clip_skip + 1)]
             # We also need to apply the final LayerNorm here to not mess with the
             # representations. The `last_hidden_states` that we typically use for
             # obtaining the final prompt representations passes through the LayerNorm
             # layer.
-            encoder_hidden_states = self.net.text_encoder.text_model.final_layer_norm(encoder_hidden_states)
+            encoder_hidden_states = self.net.text_encoder.text_model.final_layer_norm(
+                encoder_hidden_states)
         return encoder_hidden_states
-    
+
     def forward(self, x: Dict):
         # Convert images to latent space
-        latents = self.net.vae.encode(x["pixel_values"].to(self.weight_dtype)).latent_dist.sample()
+        latents = self.net.vae.encode(x["pixel_values"].to(
+            self.weight_dtype)).latent_dist.sample()
         latents = latents * self.net.vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
@@ -247,38 +281,41 @@ class ModelFactoryModule(torch.nn.Module):
         if self.noise_offset:
             # https://www.crosslabs.org//blog/diffusion-with-offset-noise
             noise += self.noise_offset * torch.randn(
-                (latents.shape[0], latents.shape[1], 1, 1), device=latents.device
-            )
+                (latents.shape[0], latents.shape[1], 1, 1),
+                device=latents.device)
 
         bsz = latents.shape[0]
         # Sample a random timestep for each image
-        timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
+        timesteps = torch.randint(
+            0,
+            self.noise_scheduler.config.num_train_timesteps, (bsz, ),
+            device=latents.device)
         timesteps = timesteps.long()
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
-        noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
+        noisy_latents = self.noise_scheduler.add_noise(latents, noise,
+                                                       timesteps)
 
         # Get the text embedding for conditioning
         encoder_hidden_states = self.encode_text_ids(x["input_ids"])
-
 
         # Get the target for loss depending on the prediction type
         if self.noise_scheduler.config.prediction_type == "epsilon":
             target = noise
         elif self.noise_scheduler.config.prediction_type == "v_prediction":
-            target = self.noise_scheduler.get_velocity(latents, noise, timesteps)
+            target = self.noise_scheduler.get_velocity(latents, noise,
+                                                       timesteps)
         else:
-            raise ValueError(f"Unknown prediction type {self.noise_scheduler.config.prediction_type}")
+            raise ValueError(
+                f"Unknown prediction type {self.noise_scheduler.config.prediction_type}"
+            )
 
         # Predict the noise residual and compute loss
-        model_pred = self.net.unet(noisy_latents, timesteps, encoder_hidden_states).sample
+        model_pred = self.net.unet(noisy_latents, timesteps,
+                                   encoder_hidden_states).sample
 
-        return target,model_pred
-
-    
-    
-
+        return target, model_pred
 
 
 class TaskFactoryModule(pl.LightningModule):
@@ -320,8 +357,12 @@ class TaskFactoryModule(pl.LightningModule):
 
     def forward(self, x):
         return self.model(x)
-    
-    def generate(self,x,height=512,width=512,num_inference_steps=20,
+
+    def generate(self,
+                 x,
+                 height=512,
+                 width=512,
+                 num_inference_steps=20,
                  num_images_per_prompt=1,
                  guidance_scale: float = 7.5):
         do_classifier_free_guidance = guidance_scale > 1.0
@@ -329,22 +370,22 @@ class TaskFactoryModule(pl.LightningModule):
         height = height or self.model.net.unet.config.sample_size * self.model.vae_scale_factor
         width = width or self.mode.net.unet.config.sample_size * self.model.vae_scale_factor
         # 3. Encode input prompt
-        prompt_embeds =self.model.encode_text_ids(x['input_ids'])
-        batch_size=prompt_embeds.shape[0]
+        prompt_embeds = self.model.encode_text_ids(x['input_ids'])
+        batch_size = prompt_embeds.shape[0]
         if do_classifier_free_guidance:
-            neg_prompt_embeds =self.model.encode_text_ids(x['neg_input_ids'])
+            neg_prompt_embeds = self.model.encode_text_ids(x['neg_input_ids'])
             prompt_embeds = torch.cat([neg_prompt_embeds, prompt_embeds])
 
-        
-        device=prompt_embeds.device
+        device = prompt_embeds.device
 
-         # 4. Prepare timesteps
-        self.model.noise_scheduler.set_timesteps(num_inference_steps, device=device)
+        # 4. Prepare timesteps
+        self.model.noise_scheduler.set_timesteps(num_inference_steps,
+                                                 device=device)
         timesteps = self.model.noise_scheduler.timesteps
 
         # 5. Prepare latent variables
         num_channels_latents = self.model.net.unet.config.in_channels
-        generator=torch.manual_seed(2023)#how to get lighting modolue seed?
+        generator = torch.manual_seed(2023)  #how to get lighting modolue seed?
         latents = self.model.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -357,32 +398,34 @@ class TaskFactoryModule(pl.LightningModule):
         # 7. Denoising loop
         for t in tqdm(timesteps):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-            latent_model_input = self.model.noise_scheduler.scale_model_input(latent_model_input, t)
+            latent_model_input = torch.cat(
+                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = self.model.noise_scheduler.scale_model_input(
+                latent_model_input, t)
 
             # predict the noise residual
             noise_pred = self.model.net.unet(
-                latent_model_input,
-                t,
-                encoder_hidden_states=prompt_embeds
-            ).sample
+                latent_model_input, t,
+                encoder_hidden_states=prompt_embeds).sample
 
             # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                noise_pred = noise_pred_uncond + guidance_scale * (
+                    noise_pred_text - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.model.noise_scheduler.step(noise_pred, t, latents).prev_sample
+            latents = self.model.noise_scheduler.step(noise_pred, t,
+                                                      latents).prev_sample
         image = self.model.decode_latents(latents)
 
-        image=image.numpy()
+        image = image.numpy()
         return image
 
     def _shared_step(self, batch):
-        y_true,y_pred = self(batch)
+        y_true, y_pred = self(batch)
         loss = self.loss(y_true, y_pred)
-        
+
         return {"loss": loss, "preds": y_pred, "y": y_true}
 
     # 【train】==================================================================
@@ -403,7 +446,6 @@ class TaskFactoryModule(pl.LightningModule):
                  sync_dist=True,
                  rank_zero_only=True)
 
-
         return outputs["loss"]
 
     def on_validation_epoch_start(self):
@@ -423,8 +465,6 @@ class TaskFactoryModule(pl.LightningModule):
         #     elif name=='fid':
         #         metric.update(batch['image'],real=True)
         #         metric.update(torch.tensor(images),real=False)
-                
-
 
     def on_validation_epoch_end(self):
         # 评估loss
@@ -435,7 +475,7 @@ class TaskFactoryModule(pl.LightningModule):
                  sync_dist=True,
                  rank_zero_only=True)
         # # 评估metric
-        
+
         # for m, v in self.eval_metrics.items():
         #     v.compute()
         #     self.log(f"val/{m}",
