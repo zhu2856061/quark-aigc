@@ -1,0 +1,61 @@
+lightningModule:
+
+  data:
+    target: transformers.AlbertTokenizer
+    model_card_id: ./albert-base-v2
+    padding: "max_length"
+    truncation: true
+    max_length: 512
+    return_tensors: pt
+
+    tr_files: ./data/train.imdb.format
+    val_files: ./data/train.imdb.format
+    shuffle_size: 25000
+    batch_size: 16
+    num_workers: 1
+    pin_memory: true
+
+  model:
+    network_config:
+      base:
+        target: transformers.AlbertModel
+        model_card_id: ./albert-base-v2
+      task:
+        target: module.layer.feedforward.FeedForward
+        params:
+          n_layers: [768,2]
+          dropout: 0.1
+          bias: true
+
+    loss_config:
+      target: torch.nn.CrossEntropyLoss
+
+    metric_config:
+      - name: acc
+        target: torchmetrics.classification.BinaryAccuracy
+
+    optimizer_config:
+      target: torch.optim.AdamW
+      params:
+        lr: 1e-6
+        weight_decay: 1e-6
+
+    scheduler_config:
+      target: module.scheduler.lr_scheduler.LambdaWarmUpLinearScheduler
+      params:
+        warm_up_steps: [ 100 ]
+        cycle_lengths: [ 10000000000000 ]
+        f_start: [ 1.e-6 ]
+        f_max: [ 1. ]
+        f_min: [ 1.e-6 ]
+        verbosity_interval: 0
+
+  runtime:
+    experiment_name: merlin
+    checkpoint_path: "savemodel"
+    strategy: auto # ddp ddp_find_unused_parameters_true
+    accelerator: cpu
+    devices: 1
+    max_epochs: 1
+    monitor: val/acc
+    mode: max
